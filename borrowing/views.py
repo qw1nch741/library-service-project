@@ -1,7 +1,16 @@
+import datetime
+
+from django.db import transaction
 from rest_framework import viewsets, mixins
 from rest_framework.permissions import IsAuthenticated
-from borrowings.models import Borrowing
-from borrowings.serializers import (
+from rest_framework import serializers
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework import status
+
+from borrowing.models import Borrowing
+from borrowing.notifications import send_telegram_message
+from borrowing.serializers import (
     BorrowingReadSerializer,
     BorrowingCreateSerializer,
 )
@@ -14,6 +23,18 @@ class BorrowingViewSet(
 ):
     # We require users to be logged in to interact with borrowings
     permission_classes = (IsAuthenticated,)
+
+    @action(detail=True, methods=["POST"], url_path="return")
+    def return_borrowing(self, request, pk=None):
+        borrowing = self.get_object()
+        returned_book = borrowing.book
+
+        returned_book.inventory += 1
+        borrowing.actual_return_date = datetime.date.today()
+
+        returned_book.save()
+
+        return Response({"status": "Book returned successfully"}, status=status.HTTP_200_OK)
 
     def get_queryset(self):
         queryset = Borrowing.objects.all()
@@ -45,4 +66,23 @@ class BorrowingViewSet(
             return BorrowingReadSerializer
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        book = serializer.validated_data["book"]
+
+        with transaction.atomic():
+            if book.inventory == 0:
+                raise serializers.ValidationError("Out of stock!")
+
+            book.inventory -= 1
+            book.save()
+
+            borrowing = serializer.save(user=self.request.user)
+            borrowing.save()
+
+        message = (
+            f"New Borrowing!\n"
+            f"User: {self.request.user.email}\n"
+            f"Book: {book.title}\n"
+            f"Expected Return: {borrowing.expected_return_date}"
+        )
+
+        send_telegram_message(message)
