@@ -16,5 +16,5 @@ urlpatterns = [
     path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
 
     # 4. Profile "Me" endpoint
-    path("me/", ManageUserView.as_view(), name="manage"),2
+    path("me/", ManageUserView.as_view(), name="manage"),
 ]

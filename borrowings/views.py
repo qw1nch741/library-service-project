@@ -1,5 +1,8 @@
 import datetime
 
+import os
+from dotenv import load_dotenv
+
 from django.db import transaction
 from rest_framework import viewsets, mixins
 from rest_framework.permissions import IsAuthenticated
@@ -8,12 +11,15 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
 
-from borrowing.models import Borrowing
-from borrowing.notifications import send_telegram_message
-from borrowing.serializers import (
+from borrowings.models import Borrowing
+from borrowings.notifications import send_telegram_message
+from borrowings.serializers import (
     BorrowingReadSerializer,
     BorrowingCreateSerializer,
 )
+
+load_dotenv()
+
 
 class BorrowingViewSet(
     mixins.ListModelMixin,
@@ -29,10 +35,15 @@ class BorrowingViewSet(
         borrowing = self.get_object()
         returned_book = borrowing.book
 
-        returned_book.inventory += 1
-        borrowing.actual_return_date = datetime.date.today()
+        if borrowing.actual_return_date:
+            return Response({"error": "Book already returned"}, status=status.HTTP_400_BAD_REQUEST)
 
-        returned_book.save()
+        with transaction.atomic():
+            borrowing.actual_return_date = datetime.date.today()
+            borrowing.save()
+
+            returned_book.inventory += 1
+            returned_book.save()
 
         return Response({"status": "Book returned successfully"}, status=status.HTTP_200_OK)
 
@@ -76,7 +87,6 @@ class BorrowingViewSet(
             book.save()
 
             borrowing = serializer.save(user=self.request.user)
-            borrowing.save()
 
         message = (
             f"New Borrowing!\n"

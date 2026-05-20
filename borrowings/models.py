@@ -9,9 +9,9 @@ class Borrowing(models.Model):
     expected_return_date = models.DateField()
     actual_return_date = models.DateField(null=True, blank=True)
 
-    book_id = models.ForeignKey(Book, on_delete=models.CASCADE, related_name="borrowings")
+    book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name="borrowings")
 
-    user_id = models.ForeignKey(
+    user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="borrowings"
